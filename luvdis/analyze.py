@@ -662,28 +662,22 @@ class State:
                 offset = ins.size
                 if ins.id == Opcode.bl or ins.id in BRANCHES:
                     target = ins.target
-                    if target in self.label_map:  # Branch to label
-                        name = self.label_for(target)
-                        emit = f'{ins.mnemonic} {name}'
-                    else:  # Missing label; emit raw bytes
-                        warn(f'{addr:08X}: Missing target for "{ins.mnemonic}": {target:08X}')
-                        i = rom.read(addr, offset)
-                        if offset == 4:
-                            emit = f'.4byte 0x{i:08X} @ {ins.mnemonic} _{target:08X}'
-                        else:
-                            emit = f'.2byte 0x{i:04X} @ {ins.mnemonic} _{target:08X}'
+                    if not (target in self.label_map):
+                        self.label_map[target] = BRANCH
+                    # Branch to label
+                    name = self.label_for(target)
+                    emit = f'{ins.mnemonic} {name}'
                 elif ins.id == Opcode.bx:
                     value = rom.read(addr, 2)
                     # Assembler will not emit bx with nonzero rd, see THUMB.5 TODO: Should these be treated as illegal?
                     emit = f'.inst 0x{value:04X}' if value & 3 != 0 else str(ins)
                 elif ins.id == Opcode.ldr and isinstance(ins, Thumb6):  # Convert PC-relative loads into labels
                     target = ins.target
-                    if target in self.label_map:
-                        name = self.label_for(target)
-                        op_str = ins.op_str[:ins.op_str.index('[')] + name
-                    else:
-                        op_str = ins.op_str
-                        warn(f'{addr:08X}: Missing target for "ldr {op_str}": {target:08X}')
+                    # Create label for missing target
+                    if not (target in self.label_map):
+                        self.label_map[target] = WORD
+                    name = self.label_for(target)
+                    op_str = ins.op_str[:ins.op_str.index('[')] + name
                     value = rom.read(target, 4)
                     emit = f'{ins.mnemonic} {op_str} @ =0x{value:08X}'  # QOL; comment value read
                 else:
